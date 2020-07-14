@@ -372,3 +372,17 @@ var readPGNText = function (source_code, error_handler) {
 
     return this;
 };
+
+// Draws the editor state, adding the event handlers and managing
+// the state tree.
+var PGNEditor = function(textarea_id, display_container_id) {
+    this.input = document.getElementById(textarea_id);
+    this.editor_root = document.getElementById(display_container_id);
+    this.errors = [];
+    var errors_capture = this.errors;
+    var handle_error = function(err_id, word) {
+        errors_capture.append('Error type: ' + err_id + ' at ' + word);
+    }
+    this.parsed_pgn = readPGNText(this.input.value, handle_error);
+    
+};
