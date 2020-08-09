@@ -1,11 +1,8 @@
 // TODO: figure out if I care about namespaces or if it's just going to be
 // a big dumping ground.
 
-// This is for most moves, but not en passantes or certain under-specified moves.
-// In particular, notation conveying moves such as "e file pawn to d file" which
-// can be an unambiguous capture and just noted as "ed" is not matched: the notation
-// is forced to include the destination fully (which seems reasonable given most
-// examples).
+// Most moves. Dissection is allowed by the capturing groups. See the usage in
+// the parser for details.
 var moveNotationRegex = /([RNBQKP]{0,1})([a-h]{0,1})([1-8]{0,1})(x{0,1})([a-h][1-8])(=[RNBQ]){0,1}([+#]{0,1})|(O-O)|(O-O-O)/;
 
 var chessNotationToCoords = function(chess) {
@@ -80,7 +77,7 @@ var isChecking = function(piece, board, source, dest_pgn) {
 	var is_close = king_dist === 1 && dest[1] > src[1];
 	var capture = (dest[0] === src[0] || isCapturablePiece(piece, dest_piece));
 	return is_close && capture;
-    case 'p':
+    case 'p': // TODO: support en passantes
 	var is_close = king_dist === 1 && dest[1] < src[1];
 	var capture = (dest[0] === src[0] || isCapturablePiece(piece, dest_piece));
 	return is_close && capture;
@@ -149,7 +146,7 @@ var getSourcePieceNotation = function(board, piece, rank, file, dest) {
     var checked_tenables = tenable_coords.filter(function(coords) {
         return isChecking(piece, board, coords, dest);
     });
-    if (tenable_coords.length === 1) {
+    if (checked_tenables.length === 1) {
         return coordsToChessNotation(tenable_coords[0]);
     }
     return '';
@@ -376,13 +373,33 @@ var readPGNText = function (source_code, error_handler) {
 // Draws the editor state, adding the event handlers and managing
 // the state tree.
 var PGNEditor = function(textarea_id, display_container_id) {
+    var _this = this;
     this.input = document.getElementById(textarea_id);
     this.editor_root = document.getElementById(display_container_id);
+
     this.errors = [];
-    var errors_capture = this.errors;
-    var handle_error = function(err_id, word) {
-        errors_capture.append('Error type: ' + err_id + ' at ' + word);
-    }
-    this.parsed_pgn = readPGNText(this.input.value, handle_error);
-    
+    this.parsed_pgn = null;
+    this.re_parse_pgn = function() {
+	var handle_error = function(err_id, word) {
+            _this.errors.append('Error type: ' + err_id + ' at ' + word);
+	}
+	this.parsed_pgn = readPGNText(this.input.value, handle_error);
+    };
+
+    this.initialize_editor = function() {
+        _this.board = document.createTag('table');
+	_this.editor_root.appendChild(_this.board);
+	_this.warning_list = document.createTag('ul');
+	_this.editor_root.appendChild(_this.warning_list);
+	_this.next_move_sel = document.createTag('div');
+	_this.editor_root.appendChild(_this.next_move_sel);
+    };
+
+    this.draw_board = function(board) {
+        
+    };
+
+    this.run = function() {
+        
+    };
 };
