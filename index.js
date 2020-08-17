@@ -238,8 +238,16 @@ var MoveTreeNode = function (board_state, kids) {
 	this.kids.push(next_node);
         next_node.parent = this;
 	return next_node;
-    }
-};
+    };
+
+    // TODO: this needs to really find a tree node closest to a
+    // node in another tree. Hence:
+    // 1) Rename
+    // 2) Algorithm for figuring out the node (yay, parent pointers!)
+    this.needs_redraw_from = function(other_board) {
+
+    };
+}; // MoveTreenode definition
 
 // Makes the tree root for the default opening.
 // Probably worth assuming white is along
@@ -374,19 +382,27 @@ var readPGNText = function (source_code, error_handler) {
 // the state tree.
 var PGNEditor = function(textarea_id, display_container_id) {
     var _this = this;
+    // Set before drawing
     this.input = document.getElementById(textarea_id);
     this.editor_root = document.getElementById(display_container_id);
-
-    this.errors = [];
+    this.errors = []; // TODO: consider not having this as a variable
     this.parsed_pgn = null;
+
     this.re_parse_pgn = function() {
 	var handle_error = function(err_id, word) {
             _this.errors.append('Error type: ' + err_id + ' at ' + word);
 	}
-	this.parsed_pgn = readPGNText(this.input.value, handle_error);
+	_this.parsed_pgn = readPGNText(_this.input.value, handle_error);
+	_this.warning_list.innerHTML = '';
+	for(var i = 0; i < _this.errors.length; i++) {
+	    var curr_warn = document.createTag('li');
+	    curr_warn.innerText = _this.errors[i];
+            _this.warning_list.appendChild(curr_warn);
+	}
     };
 
     this.initialize_editor = function() {
+	_this.editor_root.className = 'editor-root';
         _this.board = document.createTag('table');
 	_this.editor_root.appendChild(_this.board);
 	_this.warning_list = document.createTag('ul');
@@ -395,11 +411,12 @@ var PGNEditor = function(textarea_id, display_container_id) {
 	_this.editor_root.appendChild(_this.next_move_sel);
     };
 
-    this.draw_board = function(board) {
-        
-    };
+    this.handle_editor_change = function (_e) {
+        var old_board = _this.parsed_pgn;
+        _this.re_parse_pgn();
+    }
 
-    this.run = function() {
+    this.draw_board = function(board) {
         
     };
 };
