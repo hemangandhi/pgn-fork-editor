@@ -49,9 +49,17 @@ var isNotSelfCapture = function(p, q) {
     return ((p === p.toUpperCase()) !== (q === q.toUpperCase()));
 }
 
-var isCapturablePiece = function(p, q) {
+var isCapturablePiece = function(p, q) {p
     var non_empty = p !== ' ' && q !== ' ';
     return non_empty && isNotSelfCapture(p, q);
+}
+
+var getPieceColor = function(p) {
+    if (p === ' ') {
+        return 'no';
+    } else if (p.toLowerCase() === p) {
+        return 'black';
+    } else return 'white';
 }
 
 var getDelVec = function(v1, v2) {
@@ -61,7 +69,7 @@ var getDelVec = function(v1, v2) {
 }
 
 var kingMoveDist = function(v1, v2) {
-    return Math.max(getDelVec(v1, v2).map(Math.abs));
+    return Math.max(...getDelVec(v1, v2).map(Math.abs));
 }
 
 // Given the usage in the function below source is [int, int]
@@ -74,12 +82,14 @@ var isChecking = function(piece, board, source, dest_pgn) {
     if (king_dist === 0) return false;
     switch (piece) {
     case 'P':
-	var is_close = king_dist === 1 && dest[1] > src[1];
-	var capture = (dest[0] === src[0] || isCapturablePiece(piece, dest_piece));
+	var is_close = king_dist === 1 && dest[0] > source[0];
+	is_close = is_close || (king_dist === 2 && source[0] === 1 && dest[0] === 3);
+	var capture = (dest[1] === source[1] || isCapturablePiece(piece, dest_piece));
 	return is_close && capture;
     case 'p': // TODO: support en passantes
-	var is_close = king_dist === 1 && dest[1] < src[1];
-	var capture = (dest[0] === src[0] || isCapturablePiece(piece, dest_piece));
+	var is_close = king_dist === 1 && dest[0] < source[0];
+	is_close = is_close || (king_dist === 2 && source[0] === 6 && dest[0] === 4);
+	var capture = (dest[1] === source[1] || isCapturablePiece(piece, dest_piece));
 	return is_close && capture;
     case 'R':
     case 'r':
@@ -120,7 +130,7 @@ var getSourcePieceNotation = function(board, piece, rank, file, dest) {
             return file + rank;
 	}
     } else if (rank) {
-	var rank_coord = rank.charCodeAt(0) - code_of_1;
+	var rank_coord = 7 - (rank.charCodeAt(0) - code_of_1);
         for(var i = 0; i < 8; i++) {
             if (board[rank_coord][i] === piece) {
                 tenable_coords.push([rank_coord, i]);
@@ -163,7 +173,7 @@ var MoveTreeNode = function (board_state, kids) {
     this.move_annotations = [];
     this.getNextBoardState = function(move, is_white) {
 	var move_parsed = move.match(moveNotationRegex);
-	if(!move_parsed[0]) {
+	if(!move_parsed || !move_parsed[0]) {
             return null;
 	}
 
@@ -171,12 +181,12 @@ var MoveTreeNode = function (board_state, kids) {
 	if (move_parsed[8]) {
             // king's side castling
 	    if (is_white) {
-                if (this.current_state[0].slice(4) === 'K  R') {
+                if (''.join(this.current_state[0].slice(4)) === 'K  R') {
                     new_board = makeMoveInBoard(this.current_state, 'e1', 'g1');
 		    new_board = makeMoveInBoard(castled, 'h1', 'f1');
 		}
 	    } else {
-                if (this.current_state[7].slice(4) === 'k  r') {
+                if (''.join(this.current_state[7].slice(4)) === 'k  r') {
                     new_board = makeMoveInBoard(this.current_state, 'e8', 'g8');
 		    new_board = makeMoveInBoard(castled, 'h8', 'f8');
 		}
@@ -186,12 +196,12 @@ var MoveTreeNode = function (board_state, kids) {
             // queen's side castling (I should feel bad indexing into a list of 10
 	    // things, but unlike py, js seems not to have tagged capture groups)
 	    if (is_white) {
-                if (this.current_state[0].slice(0) === 'R   K') {
+                if (''.join(this.current_state[0].slice(0)) === 'R   K') {
                     new_board = makeMoveInBoard(this.current_state, 'e1', 'c1');
 		    new_board = makeMoveInBoard(castled, 'a1', 'd1');
 		}
 	    } else {
-                if (this.current_state[7].slice(0) === 'r   k') {
+                if (''.join(this.current_state[7].slice(0)) === 'r   k') {
                     new_board = makeMoveInBoard(this.current_state, 'e8', 'c8');
 		    new_board = makeMoveInBoard(castled, 'a8', 'd8');
 		}
@@ -240,12 +250,32 @@ var MoveTreeNode = function (board_state, kids) {
 	return next_node;
     };
 
-    // TODO: this needs to really find a tree node closest to a
-    // node in another tree. Hence:
-    // 1) Rename
-    // 2) Algorithm for figuring out the node (yay, parent pointers!)
-    this.needs_redraw_from = function(other_board) {
+    // Comparison by board state only.
+    this.equal_boards = function(other_node) {
+	if (!other_node) return false;
+        for(var i = 0; i < 8; i++) {
+            for(var j = 0; j < 8; j++) {
+                if (this.current_state[i][j] !== other_node.current_state[i][j]) {
+                    return false;
+		}
+	    }
+	}
+	return true;
+    };
 
+    this.nearest_node_in = function(other_board) {
+	// for every ancestor in this tree, start an upwards search
+	// for a node with a similar board state.
+	var root_node = other_board;
+	for(var current_check = root_node; current_check !== null;
+	    root_node = current_check, current_check = current_check.parent) {
+            for(var this_check = this; this_check != null; this_check = this_check.parent) {
+                if (this_check.equal_boards(current_check)) {
+                    return current_check;
+		}
+	    }
+	}
+	return root_node;
     };
 }; // MoveTreenode definition
 
@@ -254,14 +284,14 @@ var MoveTreeNode = function (board_state, kids) {
 // makeRoot.current_state[0]
 var makeRoot = function() {
     // TODO: not hack black piece = lower case lol
-    return new MoveTreeNode([['RNBQKBNR'],
-			     ['PPPPPPPP'],
-			     ['        '],
-			     ['        '],
-			     ['        '],
-			     ['        '],
-			     ['pppppppp'],
-			     ['rnbqkbnr']], []);
+    return new MoveTreeNode(['RNBQKBNR'.split(''),
+			     'PPPPPPPP'.split(''),
+			     '        '.split(''),
+			     '        '.split(''),
+			     '        '.split(''),
+			     '        '.split(''),
+			     'pppppppp'.split(''),
+			     'rnbqkbnr'.split('')], []);
 };
 
 // Clean up tag values: remove the surrounding quotes and if there are any
@@ -285,7 +315,7 @@ var readPGNText = function (source_code, error_handler) {
 	var key = lines[i].split(/s+/)[0].slice(1);
 	// All the crap after the key except the trailing "]"
 	var value = lines[i].slice(key.length + 1).trim().slice(0, -1);
-	if (!tags.hasOwnProperty(key)) this.tags[key] = [];
+	if (!this.tags.hasOwnProperty(key)) this.tags[key] = [];
 	this.tags[key].push(fixPGNTagValue(value));
     }
 
@@ -296,9 +326,10 @@ var readPGNText = function (source_code, error_handler) {
     var awaiting_char_for_parsing = '';
     var comment_buffer = [];
     for (; i < lines.length; i++) {
-        var words = lines[i].split(/s+/);
+        var words = lines[i].split(/\s+/);
 	for (var j = 0; j < words.length; j++) {
-	    if(awaiting_char_for_parsing) {
+	    if (words[j] === "") continue;
+	    if(awaiting_char_for_parsing !== '') {
 		var ind_of_await = words[j].lastIndexOf(awaiting_char_for_parsing);
 		if(ind_of_await < 0) {
                     if(comment_buffer) {
@@ -341,7 +372,7 @@ var readPGNText = function (source_code, error_handler) {
 		var full_word = words[j];
 		words[j] = full_word.slice(0, idx_of_open);
 		words.splice(j + 1, 0, '{');
-		words.splice(j + 2, 0, full_word.slice(idx_of+open + 1));
+		words.splice(j + 2, 0, full_word.slice(idx_of_open + 1));
 	    }
 	    idx_of_open = words[j].indexOf('(');
 	    if (idx_of_open >= 0) {
@@ -352,30 +383,28 @@ var readPGNText = function (source_code, error_handler) {
 		var full_word = words[j];
 		words[j] = full_word.slice(0, idx_of_open);
 		words.splice(j + 1, 0, '(');
-		words.splice(j + 2, 0, full_word.slice(idx_of+open + 1));
+		words.splice(j + 2, 0, full_word.slice(idx_of_open + 1));
 	    }
 	    
-	    var counter_match = counter_regex.match(words[j]);
+	    var counter_match = words[j].match(counter_regex);
 	    if (counter_match) {
                 var is_white = counter_match[1].length === 1;
 		var turn_num = parseInt(words[j].replace('.', ''));
 		if ((turn_count % 2 === 0) !== is_white) {
                     error_handler('COUNTER_PARITY', words[j]);
-		} else if (Math.floor(turn_count / 2) !== turn_num) {
+		} else if (Math.floor(turn_count / 2) + 1 !== turn_num) {
                     error_handler('COUNTER_INDEX', words[j]);
 		}
 		continue;
 	    }
-            var next_node = current.getNextBoardState(words[j]);
-	    if (!next_node) {
+            var next_node = current.getNextBoardState(words[j], is_white);
+	    if (!next_node) { 
                 error_handler('MOVE', words[j]);
 		if(!current.parent) return this;
 		awaiting_char_for_parsing = ')';
 	    }
-	}
-    }
-
-    return this;
+	} // for word in line
+    } // for line in lines
 };
 
 // Draws the editor state, adding the event handlers and managing
@@ -385,38 +414,56 @@ var PGNEditor = function(textarea_id, display_container_id) {
     // Set before drawing
     this.input = document.getElementById(textarea_id);
     this.editor_root = document.getElementById(display_container_id);
-    this.errors = []; // TODO: consider not having this as a variable
-    this.parsed_pgn = null;
+    this.parsed_pgn = new readPGNText('', function(e, w) {console.log("IMPOSSIBLE " + e + " " + w);});
+    this.move_tree_node = this.parsed_pgn.move_tree_root;
 
     this.re_parse_pgn = function() {
-	var handle_error = function(err_id, word) {
-            _this.errors.append('Error type: ' + err_id + ' at ' + word);
-	}
-	_this.parsed_pgn = readPGNText(_this.input.value, handle_error);
 	_this.warning_list.innerHTML = '';
-	for(var i = 0; i < _this.errors.length; i++) {
-	    var curr_warn = document.createTag('li');
-	    curr_warn.innerText = _this.errors[i];
+	var handle_error = function(err_id, word) {
+	    var curr_warn = document.createElement('li');
+	    curr_warn.innerText = 'Error type: ' + err_id + ' at "' + word + '"';
             _this.warning_list.appendChild(curr_warn);
 	}
+	_this.parsed_pgn = new readPGNText(_this.input.value, handle_error);
     };
 
     this.initialize_editor = function() {
 	_this.editor_root.className = 'editor-root';
-        _this.board = document.createTag('table');
+        _this.board = document.createElement('table');
 	_this.editor_root.appendChild(_this.board);
-	_this.warning_list = document.createTag('ul');
+	_this.warning_list = document.createElement('ul');
 	_this.editor_root.appendChild(_this.warning_list);
-	_this.next_move_sel = document.createTag('div');
+	_this.next_move_sel = document.createElement('div');
 	_this.editor_root.appendChild(_this.next_move_sel);
+	_this.input.addEventListener('compositionend', _this.handle_editor_change);
+	_this.input.addEventListener('input', _this.handle_editor_change);
+	_this.draw_board();
     };
 
     this.handle_editor_change = function (_e) {
-        var old_board = _this.parsed_pgn;
         _this.re_parse_pgn();
+	_this.move_tree_node = _this.move_tree_node.nearest_node_in(_this.parsed_pgn.move_tree_root);
+	_this.draw_board();
     }
 
-    this.draw_board = function(board) {
-        
+    this.draw_board = function() {
+        _this.board.innerHTML = '';
+        for(var i = 0; i < 8; i++) {
+	    var curr_row = document.createElement('tr');
+            for(var j = 0; j < 8; j++) {
+                var curr_cell = document.createElement('td');
+		curr_cell.innerText = _this.move_tree_node.current_state[i][j].toLowerCase();
+		// White is on the top in the current way makeRoot written, so the
+		// top left corner ought to be black.
+		curr_cell.className = 'board-cell-' + ((i % 2 != j % 2)? 'white' : 'black');
+		curr_cell.className += ' board-cell-' + getPieceColor(_this.move_tree_node.current_state[i][j]) + '-piece';
+		curr_row.appendChild(curr_cell);
+	    }
+	    _this.board.appendChild(curr_row);
+	}
+    };
+
+    this.run = function () {
+        _this.initialize_editor();
     };
 };
