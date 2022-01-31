@@ -86,7 +86,7 @@ var isChecking = function(piece, board, source, dest_pgn) {
 	is_close = is_close || (king_dist === 2 && source[0] === 1 && dest[0] === 3);
 	var capture = (dest[1] === source[1] || isCapturablePiece(piece, dest_piece));
 	return is_close && capture;
-    case 'p': // TODO: support en passantes
+    case 'p':
 	var is_close = king_dist === 1 && dest[0] < source[0];
 	is_close = is_close || (king_dist === 2 && source[0] === 6 && dest[0] === 4);
 	var capture = (dest[1] === source[1] || isCapturablePiece(piece, dest_piece));
